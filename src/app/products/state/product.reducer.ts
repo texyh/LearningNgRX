@@ -2,6 +2,7 @@ import { Product } from "../product";
 import * as fromRoot from '../../state/app.state';
 import { createFeatureSelector, createSelector } from "@ngrx/store";
 import { ProductActions, ProductActionTypes } from "./product.action";
+import {createEntityAdapter, EntityState} from '@ngrx/entity';
 
 export function reducer(state = initialState, action : ProductActions) : ProductState {
 
@@ -31,28 +32,18 @@ export function reducer(state = initialState, action : ProductActions) : Product
             };
 
         case ProductActionTypes.LoadSucess:
-            return {
-                ...state,
-                products : action.payload,
-                error : ''
-            }
-        
+            return productAdapter.addAll(action.payload, {...state, error : ''})
+            
         case ProductActionTypes.LoadFail:
-            return {
-                ...state,
-                products : [],
-                error : action.payload
-            }
+            return productAdapter.removeAll({...state, error: action.payload})
+            
         
         case ProductActionTypes.UpdateProductSuccess:
-        const updatedProducts = state.products.map(
-            item => action.payload.id === item.id ? action.payload : item);
-        return {
-            ...state,
-            products: updatedProducts,
-            currentProductId: action.payload.id,
-            error: ''
-        };
+            return productAdapter.updateOne({
+                id : action.payload.id,
+                changes : action.payload
+            }, {...state, currentProductId : action.payload.id, error: ''})
+       
      
         case ProductActionTypes.UpdateProductFail:
         return {
@@ -61,13 +52,8 @@ export function reducer(state = initialState, action : ProductActions) : Product
         };
 
         case ProductActionTypes.CreateProductSuccess:
-        return {
-            ...state,
-            products: [...state.products, action.payload],
-            currentProductId: action.payload.id,
-            error: ''
-        };
-
+        return productAdapter.addOne(action.payload, {...state, currentProductId : action.payload.id, error : ''})
+        
         case ProductActionTypes.CreateProductFail:
         return {
             ...state,
@@ -75,12 +61,8 @@ export function reducer(state = initialState, action : ProductActions) : Product
         };
 
         case ProductActionTypes.DeleteProductSuccess:
-      return {
-        ...state,
-        products: state.products.filter(product => product.id !== action.payload),
-        currentProductId: null,
-        error: ''
-      };
+        return productAdapter.removeOne(action.payload, {...state, currentProductId : null, error : ''})
+        
 
     case ProductActionTypes.DeleteProductFail:
       return {
@@ -94,13 +76,30 @@ export function reducer(state = initialState, action : ProductActions) : Product
     }
 }
 
-export interface ProductState {
+export interface ProductState  extends EntityState<Product>{
     showProductCode: boolean;
     currentProductId: number | null,
     // currentProduct : Product;
-    products: Product[];
     error : string
 } 
+
+//NgRx Entity
+const productAdapter = createEntityAdapter<Product>({
+    selectId : (product: Product) => product.id
+});
+
+const initialState : ProductState = productAdapter.getInitialState({
+    showProductCode : true,
+    currentProductId: null,
+    error : '',
+})
+
+export const {
+    selectIds,
+    selectEntities,
+    selectAll,
+    selectTotal,
+  } = productAdapter.getSelectors();
 
 const getProductFeatureState = createFeatureSelector<ProductState>('products');
 
@@ -112,7 +111,7 @@ export const getCurrentProductId = createSelector(
     getProductFeatureState, state => state.currentProductId)
 
 export const getAllProducts = createSelector(
-    getProductFeatureState, state => state.products
+    getProductFeatureState, selectAll
 )
 
 export const getCurrentProduct = createSelector(
@@ -142,9 +141,4 @@ export interface State extends fromRoot.State {
 }
 
 
-const initialState : ProductState =  {
-    showProductCode : true,
-    currentProductId: null,
-    products: [],
-    error : ''
-}
+
